@@ -1,0 +1,17 @@
+# Core app
+streamlit
+
+# LangChain & LangGraph
+langchain
+langgraph
+langchain-core
+langgraph-checkpoint
+
+# Google Gemini LLM support
+langchain-google-genai
+
+# Environment variables
+python-dotenv
+
+# (Optional but often useful)
+typing-extensions

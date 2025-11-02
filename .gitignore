@@ -1,0 +1,24 @@
+
+
+.env
+
+
+__pycache__/
+*.pyc
+
+# Virtual environment
+# Common names, add yours if it's different
+venv/
+.venv/
+env/
+.env/
+env.bak/
+venv.bak/
+
+# Streamlit configuration
+.streamlit/
+
+# IDE and OS specific files
+.vscode/
+.idea/
+.DS_Store
