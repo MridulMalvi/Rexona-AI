@@ -32,8 +32,7 @@ Clone the repository and install the dependencies:
 
 ```bash
 # Clone the repository
-git clone [https://github.com/your-username/your-repo-name.git](https://github.com/your-username/your-repo-name.git)
-cd your-repo-name
+git clone [https://github.com/MridulMalvi/chatbot.git]
 
 # Install requirements
 pip install -r requirements.txt
@@ -48,8 +47,8 @@ GOOGLE_API_KEY=your_gemini_api_key_here
 ````
 streamlit run app.py
 ````
-📁 Project Structure
-->app.py: The main Streamlit interface, handling UI logic and session state.
-->backend.py: Contains the chatbot logic, LLM initialization, and state graph.
-->requirements.txt: Lists all Python libraries required for the project.
-->.env: Stores sensitive API keys (do not commit to GitHub).
+### 📁 Project Structure
+#### ->app.py: The main Streamlit interface, handling UI logic and session state.
+#### ->backend.py: Contains the chatbot logic, LLM initialization, and state graph.
+#### ->requirements.txt: Lists all Python libraries required for the project.
+#### ->.env: Stores sensitive API keys (do not commit to GitHub).
