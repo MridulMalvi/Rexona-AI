@@ -47,7 +47,7 @@ GOOGLE_API_KEY=your_gemini_api_key_here
 ````
 streamlit run app.py
 ````
-### 📁 Project Structure
+###  Project Structure
 #### ->app.py: The main Streamlit interface, handling UI logic and session state.
 #### ->backend.py: Contains the chatbot logic, LLM initialization, and state graph.
 #### ->requirements.txt: Lists all Python libraries required for the project.
