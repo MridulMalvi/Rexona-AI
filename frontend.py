@@ -1,7 +1,7 @@
 import streamlit as st
 import uuid
 from backend import chatbot
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 
 # Utility functions
 def generate_thread_id():
@@ -17,10 +17,12 @@ def add_thread_to_history(thread_id):
     st.session_state['chat_threads'].append(thread_id)
     
 def load_conversation(thread_id):
-    state = chatbot.get_state(config={'configurable': {'thread_id': thread_id}})
-    values = state.values
-    return values.get('messages', [])  # Returns empty list if 'messages' not found
-
+    try:
+        state = chatbot.get_state(config={'configurable': {'thread_id': thread_id}})
+        values = state.values
+        return values.get('messages', [])  # Returns empty list if 'messages' not found
+    except Exception:
+        return []
 
 # Initialize session state
 if 'message_history' not in st.session_state:
@@ -36,7 +38,7 @@ if st.session_state['thread_id'] not in st.session_state['chat_threads']:
     add_thread_to_history(st.session_state['thread_id'])
 
 # Sidebar UI
-st.sidebar.title('MY CHATBOT')
+st.sidebar.title('LangGraph Chatbot')
 if st.sidebar.button('New Chat'):
     reset_chat()
 
@@ -47,56 +49,88 @@ for thread_id in st.session_state['chat_threads'][::-1]:
     if st.sidebar.button(str(thread_id), key=f"thread_{thread_id}"):
         st.session_state['thread_id'] = thread_id
         
-        # --- Start of Correction ---
-        # Renamed 'message' to 'message_list' to avoid variable shadowing
         message_list = load_conversation(thread_id)
-
         temp_message = []
 
-        # Renamed 'message' to 'msg' in the loop
         for msg in message_list:
            if isinstance(msg, HumanMessage):
                role = 'user'
            else:
                role = 'assistant'
-           # Use 'msg.content'
-           temp_message.append({'role': role, 'content': msg.content})
-        # --- End of Correction ---
+           
+           # Handle content
+           content = msg.content
+           if isinstance(content, list):
+               # Join text parts if content is list
+               parts = []
+               for item in content:
+                   if isinstance(item, dict) and 'text' in item:
+                       parts.append(item['text'])
+               content = "".join(parts)
+           
+           if content: # Only append if there is content
+                temp_message.append({'role': role, 'content': content})
            
         st.session_state['message_history'] = temp_message
 
 # Display chat history
 for message in st.session_state['message_history']:
     with st.chat_message(message['role']):
-        st.text(message['content']) 
+        st.markdown(message['content']) 
 
 # User input
-user_input = st.chat_input("Enter your message...")
-
-if user_input:
+if user_input := st.chat_input("Enter your message..."):
     # Save user msg
     st.session_state['message_history'].append({'role': 'user', 'content': user_input})
     with st.chat_message('user'):
-        st.text(user_input)
+        st.markdown(user_input)
 
-    CONFIG = {"configurable": {"thread_id": st.session_state['thread_id']}}
-
-    # Stream assistant response
-    response_chunks = []
-
-    def handle_stream(chunk):
-        response_chunks.append(chunk)
-        return chunk
+    config = {"configurable": {"thread_id": st.session_state['thread_id']}}
 
     with st.chat_message("assistant"):
-        st.write_stream(
-            handle_stream(message_chunk.content)
-            for message_chunk, metadata in chatbot.stream(
+        response_placeholder = st.empty()
+        status_placeholder = st.empty() 
+        full_response = ""
+        
+        try:
+            # Stream both messages (tokens) and updates (tool status)
+            for chunk_type, payload in chatbot.stream(
                 {"messages": [HumanMessage(content=user_input)]},
-                config=CONFIG,
-                stream_mode="messages"
-            )
-        )
+                config=config,
+                stream_mode=["messages", "updates"]
+            ):
+                # 1. Handle Updates (like "tools")
+                if chunk_type == "updates":
+                    if "tools" in payload and payload['tools']:
+                        status_placeholder.info("Running tools...")
 
-    final_response = "".join(response_chunks)
-    st.session_state['message_history'].append({'role': 'assistant', 'content': final_response})
+                # 2. Handle Message Chunks
+                if chunk_type == "messages":
+                    msg, metadata = payload
+                    if isinstance(msg, AIMessage):
+                        
+                        chunk_content = msg.content
+                        
+                        # Handle varied content types from Gemini
+                        text_to_add = ""
+                        if isinstance(chunk_content, str):
+                            text_to_add = chunk_content
+                        elif isinstance(chunk_content, list):
+                            for part in chunk_content:
+                                if isinstance(part, dict) and 'text' in part:
+                                    text_to_add += part['text']
+                        
+                        full_response += text_to_add
+                        
+                        # Streaming UI update
+                        if full_response:
+                             # Once we have text, clear the status
+                            status_placeholder.empty()
+                            response_placeholder.markdown(full_response + "▌")
+                            
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+        # Final update
+        response_placeholder.markdown(full_response)
+        st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
