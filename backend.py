@@ -39,7 +39,7 @@ def get_stock_price(symbol: str) -> str:
     if not api_key:
         return "Error: API Key not configured."
         
-    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=0F2NEOMRU9KBPXEY"
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
     try:
         r = requests.get(url)
         data = r.json()
