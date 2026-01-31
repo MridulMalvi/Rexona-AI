@@ -1,136 +1,185 @@
-import streamlit as st
 import uuid
-from backend import chatbot
-from langchain_core.messages import HumanMessage, AIMessage
+import streamlit as st
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-# Utility functions
+# IMPORTS: Ensure these exist in your backend.py file
+from backend import (
+    chatbot,
+    ingest_pdf,
+    retrieve_all_threads,
+    thread_document_metadata,
+)
+
+# =========================== Utilities ===========================
 def generate_thread_id():
-    return str(uuid.uuid4())
+    return uuid.uuid4()
 
 def reset_chat():
     thread_id = generate_thread_id()
-    st.session_state['thread_id'] = thread_id
-    add_thread_to_history(thread_id)
-    st.session_state['message_history'] = []
+    st.session_state["thread_id"] = thread_id
+    add_thread(thread_id)
+    st.session_state["message_history"] = []
 
-def add_thread_to_history(thread_id):
-    st.session_state['chat_threads'].append(thread_id)
-    
+def add_thread(thread_id):
+    if thread_id not in st.session_state["chat_threads"]:
+        st.session_state["chat_threads"].append(thread_id)
+
 def load_conversation(thread_id):
-    try:
-        state = chatbot.get_state(config={'configurable': {'thread_id': thread_id}})
-        values = state.values
-        return values.get('messages', [])  # Returns empty list if 'messages' not found
-    except Exception:
-        return []
+    # Retrieve state from the backend graph using the thread_id config
+    state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
+    return state.values.get("messages", [])
 
-# Initialize session state
-if 'message_history' not in st.session_state:
-    st.session_state['message_history'] = []
+# ======================= Session Initialization ===================
+if "message_history" not in st.session_state:
+    st.session_state["message_history"] = []
 
-if 'thread_id' not in st.session_state:
-    st.session_state['thread_id'] = generate_thread_id()
+if "thread_id" not in st.session_state:
+    st.session_state["thread_id"] = generate_thread_id()
 
-if 'chat_threads' not in st.session_state:
-    st.session_state['chat_threads'] = []
+if "chat_threads" not in st.session_state:
+    st.session_state["chat_threads"] = retrieve_all_threads()
 
-if st.session_state['thread_id'] not in st.session_state['chat_threads']:
-    add_thread_to_history(st.session_state['thread_id'])
+if "ingested_docs" not in st.session_state:
+    st.session_state["ingested_docs"] = {}
 
-# Sidebar UI
-st.sidebar.title('LangGraph Chatbot')
-if st.sidebar.button('New Chat'):
+add_thread(st.session_state["thread_id"])
+
+thread_key = str(st.session_state["thread_id"])
+thread_docs = st.session_state["ingested_docs"].setdefault(thread_key, {})
+threads = st.session_state["chat_threads"][::-1]
+selected_thread = None
+
+# ============================ Sidebar ============================
+st.sidebar.title("Multi Utility Chatbot")
+st.sidebar.markdown(f"**Thread ID:** `{thread_key}`")
+
+if st.sidebar.button("New Chat", use_container_width=True):
     reset_chat()
+    st.rerun()
 
-st.sidebar.header('Previous Conversations')
+# --- Document Uploader Section ---
+doc_meta = thread_document_metadata(thread_key)
 
-for thread_id in st.session_state['chat_threads'][::-1]:
-    # Use a unique key for the button to avoid conflicts
-    if st.sidebar.button(str(thread_id), key=f"thread_{thread_id}"):
-        st.session_state['thread_id'] = thread_id
-        
-        message_list = load_conversation(thread_id)
-        temp_message = []
+if doc_meta:
+    st.sidebar.success(
+        f"Using `{doc_meta.get('filename')}` "
+        f"({doc_meta.get('chunks')} chunks)"
+    )
+else:
+    st.sidebar.info("No PDF indexed yet.")
 
-        for msg in message_list:
-           if isinstance(msg, HumanMessage):
-               role = 'user'
-           else:
-               role = 'assistant'
-           
-           # Handle content
-           content = msg.content
-           if isinstance(content, list):
-               # Join text parts if content is list
-               parts = []
-               for item in content:
-                   if isinstance(item, dict) and 'text' in item:
-                       parts.append(item['text'])
-               content = "".join(parts)
-           
-           if content: # Only append if there is content
-                temp_message.append({'role': role, 'content': content})
-           
-        st.session_state['message_history'] = temp_message
+uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for this chat", type=["pdf"])
 
-# Display chat history
-for message in st.session_state['message_history']:
-    with st.chat_message(message['role']):
-        st.markdown(message['content']) 
+if uploaded_pdf:
+    # Check if we already processed this exact file for this thread to avoid re-processing
+    if doc_meta.get('filename') == uploaded_pdf.name:
+        st.sidebar.info(f"`{uploaded_pdf.name}` is already active.")
+    else:
+        with st.sidebar.status("Indexing PDF...", expanded=True) as status_box:
+            # Call backend to ingest PDF
+            summary = ingest_pdf(
+                uploaded_pdf.getvalue(),
+                thread_id=thread_key,
+                filename=uploaded_pdf.name,
+            )
+            # Update session state with the result
+            thread_docs[uploaded_pdf.name] = summary
+            status_box.update(label="✅ PDF indexed", state="complete", expanded=False)
+            st.rerun()
 
-# User input
-if user_input := st.chat_input("Enter your message..."):
-    # Save user msg
-    st.session_state['message_history'].append({'role': 'user', 'content': user_input})
-    with st.chat_message('user'):
+st.sidebar.subheader("Past conversations")
+if not threads:
+    st.sidebar.write("No past conversations yet.")
+else:
+    for thread_id in threads:
+        if st.sidebar.button(str(thread_id), key=f"side-thread-{thread_id}"):
+            selected_thread = thread_id
+
+# ============================ Main Layout ========================
+st.title("🤖 Multi Utility Chatbot")
+# Display Chat History
+for message in st.session_state["message_history"]:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat Input
+user_input = st.chat_input("Ask about your document or use tools")
+
+if user_input:
+    # Add user message to state and display
+    st.session_state["message_history"].append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
         st.markdown(user_input)
 
-    config = {"configurable": {"thread_id": st.session_state['thread_id']}}
+    CONFIG = {
+        "configurable": {"thread_id": thread_key},
+        "metadata": {"thread_id": thread_key},
+        "run_name": "chat_turn",
+    }
 
     with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        status_placeholder = st.empty() 
-        full_response = ""
-        
-        try:
-            # Stream both messages (tokens) and updates (tool status)
-            for chunk_type, payload in chatbot.stream(
+        status_holder = {"box": None}
+
+        # Generator to stream only AI content while handling Tool status updates separately
+        def ai_only_stream():
+            for message_chunk, _ in chatbot.stream(
                 {"messages": [HumanMessage(content=user_input)]},
-                config=config,
-                stream_mode=["messages", "updates"]
+                config=CONFIG,
+                stream_mode="messages",
             ):
-                # 1. Handle Updates (like "tools")
-                if chunk_type == "updates":
-                    if "tools" in payload and payload['tools']:
-                        status_placeholder.info("Running tools...")
+                # If the chunk is a ToolMessage (tool execution output), update status
+                if isinstance(message_chunk, ToolMessage):
+                    tool_name = getattr(message_chunk, "name", "tool")
+                    if status_holder["box"] is None:
+                        status_holder["box"] = st.status(
+                            f"🔧 Using `{tool_name}` ...", expanded=True
+                        )
+                    else:
+                        status_holder["box"].update(
+                            label=f"🔧 Using `{tool_name}` ...",
+                            state="running",
+                            expanded=True,
+                        )
 
-                # 2. Handle Message Chunks
-                if chunk_type == "messages":
-                    msg, metadata = payload
-                    if isinstance(msg, AIMessage):
-                        
-                        chunk_content = msg.content
-                        
-                        # Handle varied content types from Gemini
-                        text_to_add = ""
-                        if isinstance(chunk_content, str):
-                            text_to_add = chunk_content
-                        elif isinstance(chunk_content, list):
-                            for part in chunk_content:
-                                if isinstance(part, dict) and 'text' in part:
-                                    text_to_add += part['text']
-                        
-                        full_response += text_to_add
-                        
-                        # Streaming UI update
-                        if full_response:
-                             # Once we have text, clear the status
-                            status_placeholder.empty()
-                            response_placeholder.markdown(full_response + "▌")
-                            
-        except Exception as e:
-            st.error(f"Error: {e}")
+                # If the chunk is an AIMessage (text response), yield content
+                if isinstance(message_chunk, AIMessage) and message_chunk.content:
+                    yield message_chunk.content
 
-        # Final update
-        response_placeholder.markdown(full_response)
-        st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
+        # Stream the response to the UI
+        ai_message = st.write_stream(ai_only_stream())
+
+        # Close the tool status box if it was used
+        if status_holder["box"] is not None:
+            status_holder["box"].update(
+                label="✅ Tool finished", state="complete", expanded=False
+            )
+
+    # Save assistant message to history
+    st.session_state["message_history"].append(
+        {"role": "assistant", "content": ai_message}
+    )
+
+    # Optional: Show footer if a doc is loaded
+    if doc_meta:
+        st.caption(
+            f"Context: {doc_meta.get('filename')} "
+            f"(chunks: {doc_meta.get('chunks')})"
+        )
+
+st.divider()
+
+# Handle switching threads
+if selected_thread:
+    st.session_state["thread_id"] = selected_thread
+    messages = load_conversation(selected_thread)
+
+    temp_messages = []
+    for msg in messages:
+        # Reconstruct history for UI (filter out raw ToolMessages to keep it clean)
+        role = "user" if isinstance(msg, HumanMessage) else "assistant"
+        if isinstance(msg, (HumanMessage, AIMessage)) and msg.content:
+            temp_messages.append({"role": role, "content": msg.content})
+            
+    st.session_state["message_history"] = temp_messages
+    st.session_state["ingested_docs"].setdefault(str(selected_thread), {})
+    st.rerun()
