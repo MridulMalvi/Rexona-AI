@@ -50,7 +50,8 @@ threads = st.session_state["chat_threads"][::-1]
 selected_thread = None
 
 # ============================ Sidebar ============================
-st.sidebar.title("Multi Utility Chatbot")
+st.sidebar.title(text_alignment="center", body="**Rexona AI**")
+st.sidebar.caption(text_alignment="center", body="**Your Multi-Tool Intelligence Engine.**") # ADDED CAPTION
 st.sidebar.markdown(f"**Thread ID:** `{thread_key}`")
 
 if st.sidebar.button("New Chat", use_container_width=True):
@@ -75,7 +76,7 @@ if uploaded_pdf:
     if doc_meta.get('filename') == uploaded_pdf.name:
         st.sidebar.info(f"`{uploaded_pdf.name}` is already active.")
     else:
-        with st.sidebar.status("Indexing PDF...", expanded=True) as status_box:
+        with st.sidebar.status("Indexing PDF locally...", expanded=True) as status_box:
             # Call backend to ingest PDF
             summary = ingest_pdf(
                 uploaded_pdf.getvalue(),
@@ -96,7 +97,21 @@ else:
             selected_thread = thread_id
 
 # ============================ Main Layout ========================
-st.title("🤖 Multi Utility Chatbot")
+st.title(text_alignment="center", body="🤖 Multi-Agent Chatbot")
+
+# Optional: Add the Hero Section I mentioned earlier
+if not st.session_state["message_history"]:
+    st.markdown(
+        """
+        You are Rexona AI, a private AI assistant .
+        
+        * 🧠 **Multi-Tool Intelligence:** I can use various tools like calculators, search engines, and stock APIs to provide accurate answers.
+        * 📄 **RAG:** Upload PDFs to chat with them.
+        * 🛠️ **Tools:** I can use Calculator, Search, and Stock APIs.
+        """
+    )
+    st.divider()
+
 # Display Chat History
 for message in st.session_state["message_history"]:
     with st.chat_message(message["role"]):
@@ -157,14 +172,7 @@ if user_input:
     # Save assistant message to history
     st.session_state["message_history"].append(
         {"role": "assistant", "content": ai_message}
-    )
-
-    # Optional: Show footer if a doc is loaded
-    if doc_meta:
-        st.caption(
-            f"Context: {doc_meta.get('filename')} "
-            f"(chunks: {doc_meta.get('chunks')})"
-        )
+    )   
 
 st.divider()
 

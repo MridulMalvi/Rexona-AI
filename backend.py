@@ -1,11 +1,11 @@
 import os
 import requests
 import tempfile
-import time
 from typing import TypedDict, Annotated, Dict, Any, Optional
 
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_ollama import ChatOllama, OllamaEmbeddings
+
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -16,8 +16,10 @@ from langgraph.graph import StateGraph, START
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import InMemorySaver
-# Import the specific error to catch it
-from langchain_google_genai._common import GoogleGenerativeAIError
+
+# --- NEW IMPORTS FOR AUTOMATIC ID HANDLING ---
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import InjectedToolArg
 
 load_dotenv()
 
@@ -25,22 +27,20 @@ load_dotenv()
 _THREAD_RETRIEVERS: Dict[str, Any] = {}
 _THREAD_METADATA: Dict[str, dict] = {}
 
-# --- Embeddings ---
-embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+# --- 1. SETUP LOCAL EMBEDDINGS ---
+embeddings = OllamaEmbeddings(
+    model="nomic-embed-text", 
+)
 
 # --- Helper Functions ---
-
 def _get_retriever(thread_id: Optional[str]):
     if thread_id and str(thread_id) in _THREAD_RETRIEVERS:
         return _THREAD_RETRIEVERS[str(thread_id)]
     return None
 
 def ingest_pdf(file_bytes: bytes, thread_id: str, filename: Optional[str] = None) -> dict:
-    """
-    Ingests PDF with robust error handling and 'Slow Mode' to survive API limits.
-    """
     if not file_bytes:
-        raise ValueError("No bytes received for ingestion.")
+        raise ValueError("No bytes received.")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
         temp_file.write(file_bytes)
@@ -51,50 +51,31 @@ def ingest_pdf(file_bytes: bytes, thread_id: str, filename: Optional[str] = None
         docs = loader.load()
 
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=200, separators=["\n\n", "\n", " ", ""]
+            chunk_size=800, 
+            chunk_overlap=200, 
+            separators=["\n\n", "\n", ". ", " ", ""]
         )
         chunks = splitter.split_documents(docs)
 
-        # --- SLOW MODE BATCHING ---
         vector_store = None
-        # Batch size 1 is the safest for free tier
-        batch_size = 1
+        batch_size = 20
         
-        print(f"Starting embedding for {len(chunks)} chunks (Slow Mode)...")
+        print(f"Embedding {len(chunks)} chunks locally...")
 
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i : i + batch_size]
-            attempt = 0
-            max_retries = 3
-            success = False
-
-            while not success and attempt < max_retries:
-                try:
-                    print(f"Embedding chunk {i+1}/{len(chunks)}...")
-                    if vector_store is None:
-                        vector_store = FAISS.from_documents(batch, embeddings)
-                    else:
-                        vector_store.add_documents(batch)
-                    
-                    success = True
-                    # Standard pause: 5 seconds
-                    time.sleep(5) 
-                    
-                except GoogleGenerativeAIError as e:
-                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                        print("Rate limit hit. Waiting 30 seconds before retrying...")
-                        time.sleep(30) # Long pause on error
-                        attempt += 1
-                    else:
-                        raise e # If it's another error, crash intentionally
+            if vector_store is None:
+                vector_store = FAISS.from_documents(batch, embeddings)
+            else:
+                vector_store.add_documents(batch)
             
-            if not success:
-                raise Exception("Failed to embed document after multiple retries due to rate limits.")
-
-        # --- END BATCHING ---
-
         retriever = vector_store.as_retriever(
-            search_type="similarity", search_kwargs={"k": 4}
+            search_type="mmr", 
+            search_kwargs={
+                "k": 6,
+                "fetch_k": 20,
+                "lambda_mult": 0.5
+            }
         )
 
         _THREAD_RETRIEVERS[str(thread_id)] = retriever
@@ -118,7 +99,6 @@ def thread_document_metadata(thread_id: str) -> dict:
     return _THREAD_METADATA.get(str(thread_id), {})
 
 # --- Tools ---
-
 search_tool = DuckDuckGoSearchRun(region="us-en")
 
 @tool
@@ -140,69 +120,59 @@ def calculator(first_num: float, second_num: float, operation: str) -> dict:
 def get_stock_price(symbol: str) -> str:
     """Fetch latest stock price for a symbol."""
     api_key = os.getenv("ALPHAVANTAGE_API_KEY")
-    if not api_key:
-        return "Error: API Key not configured."
-<<<<<<< HEAD
-=======
-        
->>>>>>> 1f4185ec8881a0ead85f38a267df67aec4f0e6b0
+    if not api_key: return "Error: API Key not configured."
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
     try:
         r = requests.get(url)
-        data = r.json()
-        quote = data.get("Global Quote", {})
-        if not quote:
-            return f"Could not find data for {symbol}."
-        return f"Price of {symbol}: ${quote.get('05. price')} (Change: {quote.get('10. change percent')})"
+        return str(r.json())
     except Exception as e:
-        return f"Error fetching stock data: {str(e)}"
+        return f"Error: {e}"
 
+# --- FIX: INJECT CONFIG AUTOMATICALLY ---
 @tool
-def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
+def rag_tool(
+    query: str, 
+    config: Annotated[RunnableConfig, InjectedToolArg]
+) -> str:
     """
-    Retrieve relevant information from the uploaded PDF for this chat thread.
-    Always include the thread_id when calling this tool.
+    Retrieve information from the uploaded PDF.
+    Only provide the query. The system handles the file access automatically.
     """
+    # Auto-extract thread_id from the system config
+    thread_id = config.get("configurable", {}).get("thread_id")
+    
     retriever = _get_retriever(thread_id)
     if retriever is None:
-        return {
-            "error": "No document indexed for this chat. Ask user to upload a PDF.",
-            "query": query,
-        }
-
-    result = retriever.invoke(query)
-    context = [doc.page_content for doc in result]
-
-    return {
-        "context": context,
-        "source_file": _THREAD_METADATA.get(str(thread_id), {}).get("filename"),
-    }
+        return "Error: No document indexed. Please ask the user to upload a PDF first."
+    
+    results = retriever.invoke(query)
+    
+    formatted_context = "\n\n---\n\n".join(
+        [f"Chunk {i+1}:\n{doc.page_content}" for i, doc in enumerate(results)]
+    )
+    
+    return f"Here is the relevant context retrieved from the document:\n\n{formatted_context}"
 
 tools = [get_stock_price, search_tool, calculator, rag_tool]
 
-# --- Model & Graph ---
-<<<<<<< HEAD
-=======
-# Ensure you use the correct model version available to your API key
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash") 
->>>>>>> 1f4185ec8881a0ead85f38a267df67aec4f0e6b0
+# --- 2. SETUP LOCAL LLM ---
+llm = ChatOllama(
+    model="qwen2.5", 
+    temperature=0.2, 
+)
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 llm_with_tools = llm.bind_tools(tools)
 
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 def chat_node(state: ChatState, config=None):
-    thread_id = None
-    if config and isinstance(config, dict):
-        thread_id = config.get("configurable", {}).get("thread_id")
-
+    # System Prompt Simplified: AI doesn't need to know about thread_ids anymore
     sys_msg = SystemMessage(content=(
-        "You are a helpful assistant. Use your tools for math, search, stock info, and document analysis. "
-        "If the user asks about a PDF or document, use `rag_tool` and explicitly pass the "
-        f"current thread_id: `{thread_id}`. "
-        "If asked about user identity, check the conversation history."
+        "You are a helpful AI assistant. Follow these rules strictly:\n"
+        "1. **Greetings:** If the user chats casually, reply naturally. Do NOT use tools.\n"
+        "2. **Tool Use:** ONLY call a tool if needed (Search, Stocks, Math, or PDF info).\n"
+        "3. **RAG Usage:** To answer questions about the uploaded document, simply call `rag_tool` with the user's question. Do not worry about IDs."
     ))
     
     response = llm_with_tools.invoke([sys_msg] + state['messages'])
