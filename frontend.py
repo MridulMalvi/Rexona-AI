@@ -10,7 +10,7 @@ from backend import (
     thread_document_metadata,
 )
 
-# =========================== Utilities ===========================
+#  Utilities 
 def generate_thread_id():
     return uuid.uuid4()
 
@@ -29,7 +29,7 @@ def load_conversation(thread_id):
     state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
     return state.values.get("messages", [])
 
-# ======================= Session Initialization ===================
+#  Session Initialization 
 if "message_history" not in st.session_state:
     st.session_state["message_history"] = []
 
@@ -49,7 +49,7 @@ thread_docs = st.session_state["ingested_docs"].setdefault(thread_key, {})
 threads = st.session_state["chat_threads"][::-1]
 selected_thread = None
 
-# ============================ Sidebar ============================
+#  Sidebar 
 st.sidebar.title(text_alignment="center", body="**Rexona AI**")
 st.sidebar.caption(text_alignment="center", body="**Your Multi-Tool Intelligence Engine.**") # ADDED CAPTION
 st.sidebar.markdown(f"**Thread ID:** `{thread_key}`")
@@ -58,7 +58,7 @@ if st.sidebar.button("New Chat", use_container_width=True):
     reset_chat()
     st.rerun()
 
-# --- Document Uploader Section ---
+#  Document Uploader Section 
 doc_meta = thread_document_metadata(thread_key)
 
 if doc_meta:
@@ -96,7 +96,7 @@ else:
         if st.sidebar.button(str(thread_id), key=f"side-thread-{thread_id}"):
             selected_thread = thread_id
 
-# ============================ Main Layout ========================
+#  Main Layout 
 st.title(text_alignment="center", body="🤖 Multi-Agent Chatbot")
 
 # Optional: Add the Hero Section I mentioned earlier
@@ -105,9 +105,9 @@ if not st.session_state["message_history"]:
         """
         You are Rexona AI, a private AI assistant .
         
-        * 🧠 **Multi-Tool Intelligence:** I can use various tools like calculators, search engines, and stock APIs to provide accurate answers.
-        * 📄 **RAG:** Upload PDFs to chat with them.
-        * 🛠️ **Tools:** I can use Calculator, Search, and Stock APIs.
+        *  **Multi-Tool Intelligence:** I can use various tools like calculators, search engines, and stock APIs to provide accurate answers.
+        *  **RAG:** Upload PDFs to chat with them.
+        *  **Tools:** I can use Calculator, Search, and Stock APIs.
         """
     )
     st.divider()
