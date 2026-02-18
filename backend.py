@@ -23,16 +23,16 @@ from langchain_core.tools import InjectedToolArg
 
 load_dotenv()
 
-# --- Global Storage ---
+#  Global Storage 
 _THREAD_RETRIEVERS: Dict[str, Any] = {}
 _THREAD_METADATA: Dict[str, dict] = {}
 
-# --- 1. SETUP LOCAL EMBEDDINGS ---
+#  SETUP LOCAL EMBEDDINGS 
 embeddings = OllamaEmbeddings(
     model="nomic-embed-text", 
 )
 
-# --- Helper Functions ---
+#  Helper Functions 
 def _get_retriever(thread_id: Optional[str]):
     if thread_id and str(thread_id) in _THREAD_RETRIEVERS:
         return _THREAD_RETRIEVERS[str(thread_id)]
@@ -98,7 +98,7 @@ def retrieve_all_threads():
 def thread_document_metadata(thread_id: str) -> dict:
     return _THREAD_METADATA.get(str(thread_id), {})
 
-# --- Tools ---
+#  Tools 
 search_tool = DuckDuckGoSearchRun(region="us-en")
 
 @tool
@@ -128,7 +128,6 @@ def get_stock_price(symbol: str) -> str:
     except Exception as e:
         return f"Error: {e}"
 
-# --- FIX: INJECT CONFIG AUTOMATICALLY ---
 @tool
 def rag_tool(
     query: str, 
@@ -155,7 +154,7 @@ def rag_tool(
 
 tools = [get_stock_price, search_tool, calculator, rag_tool]
 
-# --- 2. SETUP LOCAL LLM ---
+# SETUP LOCAL LLM 
 llm = ChatOllama(
     model="qwen2.5", 
     temperature=0.2, 
