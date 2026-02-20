@@ -21,6 +21,75 @@ Rexona AI is a private, local-first AI assistant designed to provide intelligent
 * **Vector Database:** FAISS
 * **PDF Processing:** PyPDF & LangChain Document Loaders
 
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    %% --- Styling Definitions ---
+    classDef frontend fill:#e3f2fd,stroke:#1565c0,color:black,rx:5,ry:5;
+    classDef engine fill:#f1f8e9,stroke:#33691e,color:black,rx:10,ry:10;
+    classDef logic fill:#fff,stroke:#546e7a,color:black,rx:5,ry:5;
+    classDef decision fill:#fff9c4,stroke:#f9a825,color:black,rx:5,ry:5,diamond;
+    classDef tool fill:#f5f5f5,stroke:#616161,color:black,rx:5,ry:5;
+    classDef storage fill:#eceff1,stroke:#455a64,color:black,shape:cyl;
+    classDef terminal fill:#e0e0e0,stroke:#212121,color:black,rx:15,ry:15;
+
+    %% --- Frontend Layer ---
+    subgraph Frontend [User Interface Streamlit]
+        UI[Streamlit UI]:::frontend
+        Logic[Streamlit Frontend Logic\nSession State & API Calls]:::frontend
+        UI <--> Logic
+    end
+
+    %% --- Connecting Frontend to Backend ---
+    Logic ==> |User Input / PDF Upload| LangGraphEngine
+    FinalResponse ==> |Streaming Output| UI
+
+    %% --- Backend Layer (LangGraph) ---
+    subgraph LangGraphEngine [LangGraph Backend Engine]
+        direction TB
+        START((START)):::terminal --> LLM[LLM Node\nOllama Qwen2.5]:::logic
+        
+        LLM --> Condition{Tools Needed?}:::decision
+        
+        %% Path 1: No tools needed, generate final response
+        Condition -- No --> FinalResponse[Generate Final Response]:::logic
+
+        %% Path 2: Tools needed, execute tools
+        Condition -- Yes --> ToolCallDetected[Tool Call Detected]:::logic
+        
+        subgraph ToolExecutor [Tool Executor Node]
+            direction LR
+            Calc[Calculator Tool]:::tool
+            Search[DuckDuckGo Search]:::tool
+            Stock[AlphaVantage Stock]:::tool
+            
+            subgraph RAG [RAG Pipeline]
+                Retriever[Retriever Tool]:::tool
+            end
+        end
+        
+        ToolCallDetected --> ToolExecutor
+        
+        %% Crucial: The Feedback Loop
+        ToolExecutor ==> |Tool Outputs Observations| LLM
+    end
+    
+    %% --- External RAG Components ---
+    subgraph RAG_Data [RAG Data Flow]
+        direction LR
+        DocInput[PDF Document] --> Splitter[Text Splitter] --> EmbedDoc[Nomic Embedding] --> VectorDB[(FAISS Vector Store)]:::storage
+        VectorDB <--> Retriever
+
+        UserInput[User Query] --> EmbedQuery[Query Embedding] --> Retriever
+    end
+
+    %% Apply styles to main containers
+    class LangGraphEngine engine;
+    class Frontend frontend;
+    class ToolExecutor tool;
+    class RAG_Data tool;
+```
 ## 📋 Prerequisites
 
 Before running the application, ensure you have the following installed:
