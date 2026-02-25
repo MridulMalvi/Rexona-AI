@@ -14,7 +14,6 @@ Rexona AI is a private, local-first AI assistant designed to provide intelligent
 * **Modern UI:** A clean, reactive Streamlit interface featuring real-time tool-execution status updates and message streaming.
 
 ## 🛠️ Tech Stack
-
 * **Orchestration:** LangGraph
 * **LLM & Embeddings:** Ollama (LangChain-Ollama)
 * **Frontend:** Streamlit
@@ -126,7 +125,7 @@ Before running the application, ensure you have the following installed:
 4.  **Environment Variables:**
     Create a `.env` file in the root directory and add your API keys:
     ```env
-    ALPHAVANTAGE_API_KEY=your_api_key_here
+   ALPHAVANTAGE_API_KEY=your_api_key_here
     ```
 
 ## 🚀 Running the Application
