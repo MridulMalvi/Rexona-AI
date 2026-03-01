@@ -127,7 +127,6 @@ Before running the application, ensure you have the following installed:
     ```env
    ALPHAVANTAGE_API_KEY=your_api_key_here
     ```
-
 ## 🚀 Running the Application
 
 Start the Streamlit server:
