@@ -21,7 +21,6 @@ Rexona AI is a private, local-first AI assistant designed to provide intelligent
 * **PDF Processing:** PyPDF & LangChain Document Loaders
 
 ## 🏗️ System Architecture
-
 ```mermaid
 flowchart TD
     %% --- Styling Definitions ---
@@ -127,6 +126,7 @@ Before running the application, ensure you have the following installed:
     ```env
    ALPHAVANTAGE_API_KEY=your_api_key_here
     ```
+    
 ## 🚀 Running the Application
 
 Start the Streamlit server:
