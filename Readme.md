@@ -18,7 +18,7 @@ Rexona AI is a private, local-first AI assistant designed to provide intelligent
 * **LLM & Embeddings:** Ollama (LangChain-Ollama)
 * **Frontend:** Streamlit
 * **Vector Database:** FAISS
-* **PDF Processing:** PyPDF & LangChain Document Loaders
+* **PDF Processing:** PyPDFloader & LangChain Document Loaders
 
 ## 🏗️ System Architecture
 ```mermaid
