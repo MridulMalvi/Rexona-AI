@@ -123,12 +123,13 @@ Before running the application, ensure you have the following installed:
 
 4.  **Environment Variables:**
     Create a `.env` file in the root directory and add your API keys:
-    ```env
-   ALPHAVANTAGE_API_KEY=your_api_key_here
+   
+    ```bash
+    ALPHAVANTAGE_API_KEY=your_api_key_here
     ```
     
 ## 🚀 Running the Application
 
-Start the Streamlit server:
-```bash
-streamlit run frontend.py
+   Start the Streamlit server:
+   ```bash
+   streamlit run frontend.py
