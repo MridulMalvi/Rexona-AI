@@ -201,4 +201,3 @@ Before running the application, ensure you have the following installed:
 | Variable | Description | Required |
 |---|---|---|
 | `ALPHAVANTAGE_API_KEY` | API key for stock price lookups | Yes (for stock feature) |
-| `OLLAMA_BASE_URL` | Ollama server URL (auto-set by Docker Compose) | No |
