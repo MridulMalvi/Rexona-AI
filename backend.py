@@ -23,13 +23,17 @@ from langchain_core.tools import InjectedToolArg
 
 load_dotenv()
 
+# --- DOCKER NETWORKING ---
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
 #  Global Storage 
 _THREAD_RETRIEVERS: Dict[str, Any] = {}
 _THREAD_METADATA: Dict[str, dict] = {}
 
 #  SETUP LOCAL EMBEDDINGS 
 embeddings = OllamaEmbeddings(
-    model="nomic-embed-text", 
+    model="nomic-embed-text",
+    base_url=OLLAMA_BASE_URL,
 )
 
 #  Helper Functions 
@@ -156,8 +160,9 @@ tools = [get_stock_price, search_tool, calculator, rag_tool]
 
 # SETUP LOCAL LLM 
 llm = ChatOllama(
-    model="qwen2.5", 
-    temperature=0.2, 
+    model="qwen2.5",
+    temperature=0.2,
+    base_url=OLLAMA_BASE_URL,
 )
 
 llm_with_tools = llm.bind_tools(tools)
