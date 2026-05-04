@@ -14,6 +14,12 @@ Rexona AI is a private, local-first AI assistant designed to provide intelligent
 * **Modern UI:** A clean, reactive Streamlit interface featuring real-time tool-execution status updates and message streaming.
 * **Docker-Ready:** Fully containerized with Docker Compose for one-command deployment.
 
+### 📸 Application Screenshots
+![Rexona AI UI 1](src/Screenshot%202026-05-04%20192714.png)
+<br>
+![Rexona AI UI 2](src/Screenshot%202026-05-04%20185159.png)
+
+
 ## 🛠️ Tech Stack
 * **Orchestration:** LangGraph
 * **LLM & Embeddings:** Ollama (LangChain-Ollama)
