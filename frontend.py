@@ -51,7 +51,7 @@ selected_thread = None
 
 #  Sidebar 
 st.sidebar.title(text_alignment="center", body="**Rexona AI**")
-st.sidebar.caption(text_alignment="center", body="**Your Multi-Tool Intelligence Engine.**") # ADDED CAPTION
+st.sidebar.caption(text_alignment="center", body="**Your Multi-Tool Intelligence Engine.**")
 st.sidebar.markdown(f"**Thread ID:** `{thread_key}`")
 
 if st.sidebar.button("New Chat", use_container_width=True):
@@ -98,19 +98,6 @@ else:
 
 #  Main Layout 
 st.title(text_alignment="center", body="🤖 Multi-Agent Chatbot")
-
-# Optional: Add the Hero Section I mentioned earlier
-if not st.session_state["message_history"]:
-    st.markdown(
-        """
-        You are Rexona AI, a private AI assistant .
-        
-        *  **Multi-Tool Intelligence:** I can use various tools like calculators, search engines, and stock APIs to provide accurate answers.
-        *  **RAG:** Upload PDFs to chat with them.
-        *  **Tools:** I can use Calculator, Search, and Stock APIs.
-        """
-    )
-    st.divider()
 
 # Display Chat History
 for message in st.session_state["message_history"]:

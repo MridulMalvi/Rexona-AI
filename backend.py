@@ -2,6 +2,7 @@ import os
 import requests
 import tempfile
 from typing import TypedDict, Annotated, Dict, Any, Optional
+from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -21,7 +22,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().with_name(".env"))
 
 # --- DOCKER NETWORKING ---
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -123,12 +124,55 @@ def calculator(first_num: float, second_num: float, operation: str) -> dict:
 @tool
 def get_stock_price(symbol: str) -> str:
     """Fetch latest stock price for a symbol."""
-    api_key = os.getenv("ALPHAVANTAGE_API_KEY")
-    if not api_key: return "Error: API Key not configured."
-    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
+    api_key = (os.getenv("ALPHAVANTAGE_API_KEY") or "").strip()
+    normalized_symbol = (symbol or "").strip().upper()
+
+    if not normalized_symbol:
+        return "Error: Please provide a valid stock symbol (example: AAPL)."
+    if not api_key:
+        return "Error: ALPHAVANTAGE_API_KEY is missing. Add it to your .env file and restart the app."
+
+    url = (
+        "https://www.alphavantage.co/query"
+        f"?function=GLOBAL_QUOTE&symbol={normalized_symbol}&apikey={api_key}"
+    )
+
     try:
-        r = requests.get(url)
-        return str(r.json())
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+
+        # Alpha Vantage often returns these keys when the key/symbol/rate-limit is invalid.
+        if "Note" in data:
+            return f"Error: Alpha Vantage rate limit reached. {data['Note']}"
+        if "Error Message" in data:
+            return f"Error: Invalid symbol '{normalized_symbol}' or request rejected by Alpha Vantage."
+        if "Information" in data:
+            return f"Error: {data['Information']}"
+
+        quote = data.get("Global Quote") or {}
+        price = quote.get("05. price")
+        change = quote.get("09. change")
+        change_percent = quote.get("10. change percent")
+        last_trading_day = quote.get("07. latest trading day")
+        volume = quote.get("06. volume")
+
+        if not price:
+            return (
+                f"Error: No live quote returned for '{normalized_symbol}'. "
+                "Try another symbol or wait a moment and retry."
+            )
+
+        return (
+            f"{normalized_symbol} latest price: ${price} | "
+            f"change: {change or 'N/A'} ({change_percent or 'N/A'}) | "
+            f"last trading day: {last_trading_day or 'N/A'} | "
+            f"volume: {volume or 'N/A'}"
+        )
+    except requests.Timeout:
+        return "Error: Alpha Vantage request timed out. Please try again."
+    except requests.RequestException as e:
+        return f"Error: Network/API request failed: {e}"
     except Exception as e:
         return f"Error: {e}"
 
@@ -176,7 +220,10 @@ def chat_node(state: ChatState, config=None):
         "You are a helpful AI assistant. Follow these rules strictly:\n"
         "1. **Greetings:** If the user chats casually, reply naturally. Do NOT use tools.\n"
         "2. **Tool Use:** ONLY call a tool if needed (Search, Stocks, Math, or PDF info).\n"
-        "3. **RAG Usage:** To answer questions about the uploaded document, simply call `rag_tool` with the user's question. Do not worry about IDs."
+        "3. **Stocks:** If the user asks for stock price/quote/market value/ticker (example: AAPL, TSLA, MSFT), call `get_stock_price` with that symbol before replying.\n"
+        "4. **Math:** For arithmetic requests, call `calculator`.\n"
+        "5. **Web:** For current events or general web lookup, call DuckDuckGo search.\n"
+        "6. **RAG Usage:** To answer questions about the uploaded document, simply call `rag_tool` with the user's question. Do not worry about IDs."
     ))
     
     response = llm_with_tools.invoke([sys_msg] + state['messages'])
